@@ -8,7 +8,6 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import uuid from 'react-native-uuid';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
 import { scheduleNotification, cancelNotification } from '../services/notificationService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NoteEditor'>;
@@ -28,51 +27,30 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
 
   const saveNote = () => {
+    const id = noteId ?? uuid.v4().toString();
+
     const newNote: Note = {
-      id: noteId ?? uuid.v4().toString(),
+      id,
       content,
       type: isReminder ? 'reminder' : 'text',
       reminderDate: isReminder ? reminderDate.toISOString() : undefined,
     };
 
-    
     if (noteId) {
-      cancelNotification(noteId);
-    }
-
-    if (noteId) {
+      cancelNotification(id);
       dispatch(updateNote(newNote));
     } else {
       dispatch(addNote(newNote));
     }
 
-    
-    if (
-      isReminder &&
-      newNote.reminderDate &&
-      new Date(newNote.reminderDate) > new Date()
-    ) {
-      scheduleNotification(
-        newNote.id,
-        newNote.content || 'Reminder',
-        new Date(newNote.reminderDate)
-      );
+    if (isReminder && newNote.reminderDate) {
+      const localDate = new Date(newNote.reminderDate);
+      if (localDate > new Date()) {
+        scheduleNotification(newNote.id, newNote.content || 'Reminder', localDate);
+      }
     }
 
     navigation.goBack();
-  };
-
-  const showDatePicker = () => {
-    setDatePickerVisibility(true);
-  };
-
-  const hideDatePicker = () => {
-    setDatePickerVisibility(false);
-  };
-
-  const handleConfirm = (date: Date) => {
-    setReminderDate(date);
-    hideDatePicker();
   };
 
   return (
@@ -97,13 +75,16 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
       </View>
       {isReminder && (
         <View style={{ marginTop: 16 }}>
-          <Button title="Select reminder date/time" onPress={showDatePicker} />
+          <Button title="Select reminder date/time" onPress={() => setDatePickerVisibility(true)} />
           <Text style={{ marginTop: 8, fontSize: 16 }}>{reminderDate.toLocaleString()}</Text>
           <DateTimePickerModal
             isVisible={isDatePickerVisible}
             mode="datetime"
-            onConfirm={handleConfirm}
-            onCancel={hideDatePicker}
+            onConfirm={(date: Date) => {
+              setReminderDate(date);
+              setDatePickerVisibility(false);
+            }}
+            onCancel={() => setDatePickerVisibility(false)}
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
           />
         </View>

@@ -1,79 +1,105 @@
-import PushNotification from 'react-native-push-notification';
-import { Platform } from 'react-native';
+import notifee, { TimestampTrigger, TriggerType, EventType } from '@notifee/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { store } from '../redux/store';
 import { setNotificationTriggeredId } from '../redux/notesSlice';
 
-export const createNotificationChannel = () => {
-  if (Platform.OS === 'android') {
-    PushNotification.createChannel(
-      {
-        channelId: 'reminder-channel', 
-        channelName: 'Reminder Notifications', 
-        importance: 4, 
-        vibrate: true,
-      },
-      (created) => console.log(`[NotificationService] createChannel returned '${created}'`)
-    );
+const STORAGE_KEY = 'scheduledNotifications';
+
+type ScheduledNotifications = Record<string, string>;
+
+async function loadScheduledNotifications(): Promise<ScheduledNotifications> {
+  try {
+    const json = await AsyncStorage.getItem(STORAGE_KEY);
+    if (json) return JSON.parse(json);
+  } catch (e) {
+    console.warn('Failed to load scheduled notifications:', e);
   }
+  return {};
+}
+
+async function saveScheduledNotifications(data: ScheduledNotifications) {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn('Failed to save scheduled notifications:', e);
+  }
+}
+
+let scheduledNotifications: ScheduledNotifications = {};
+
+export const configureNotificationEvents = () => {
+  return notifee.onForegroundEvent(({ type, detail }) => {
+    if (type === EventType.DELIVERED || type === EventType.PRESS) {
+      const noteId = detail.notification?.data?.noteId;
+      if (noteId) {
+        console.log('[NotificationService] Notification triggered for noteId:', noteId);
+        store.dispatch(setNotificationTriggeredId(String(noteId)));
+        setTimeout(() => {
+          store.dispatch(setNotificationTriggeredId(null));
+        }, 3000);
+      }
+    }
+  });
 };
 
 export const configureNotifications = () => {
-  PushNotification.configure({
-    onRegister: function (token) {
-      console.log('[NotificationService] onRegister:', token);
-    },
-    onNotification: function (notification: any) {
-      console.log('[NotificationService] onNotification:', notification);
-
-      const noteId = notification.id || notification.data?.id || notification.userInfo?.id;
-      console.log('[NotificationService] extracted noteId:', noteId);
-
-      if (noteId) {
-        store.dispatch(setNotificationTriggeredId(noteId.toString()));
-        console.log(`[NotificationService] dispatched setNotificationTriggeredId(${noteId.toString()})`);
-
-        setTimeout(() => {
-          store.dispatch(setNotificationTriggeredId(null));
-          console.log('[NotificationService] reset notificationTriggeredId to null');
-        }, 3000);
-      }
-
-      if (Platform.OS === 'ios') {
-        // notification.finish(PushNotification.FetchResult.NoData);
-        console.log('[NotificationService] iOS notification finished');
-      }
-    },
-    onAction: function (notification) {
-      console.log('[NotificationService] onAction:', notification.action, notification);
-    },
-    onRegistrationError: function(err) {
-      console.error('[NotificationService] onRegistrationError:', err.message, err);
-    },
-    permissions: {
-      alert: true,
-      badge: true,
-      sound: true,
-    },
-    popInitialNotification: true,
-    requestPermissions: Platform.OS === 'ios',
+  loadScheduledNotifications().then((loaded) => {
+    scheduledNotifications = loaded;
+    console.log('[NotificationService] Loaded scheduled notifications:', scheduledNotifications);
   });
+
+  configureNotificationEvents();
 };
 
-export const scheduleNotification = (id: string, message: string, date: Date) => {
-  console.log(`[NotificationService] Scheduling notification id=${id} at ${date.toISOString()}`);
-  PushNotification.localNotificationSchedule({
-    id: id.toString(),
-    channelId: 'reminder-channel',
-    message,
-    date,
-    allowWhileIdle: true,    
-    playSound: true,
-    soundName: 'default',
-  });
+export const scheduleNotification = async (noteId: string, message: string, date: Date) => { 
+  console.log(`[NotificationService] Scheduling notification for noteId=${noteId} at ${date}`);
+
+  
+  const trigger: TimestampTrigger = {
+    type: TriggerType.TIMESTAMP,
+    timestamp: date.getTime(),
+    alarmManager: true,
+  };
+
+
+  const notificationId = await notifee.createTriggerNotification(
+    {
+      title: 'Reminder',
+      body: message,
+      data: { noteId },
+      android: {
+        channelId: 'reminder-channel',
+        smallIcon: 'ic_launcher', 
+      },
+    },
+    trigger 
+  );
+
+  scheduledNotifications[noteId] = notificationId;
+  await saveScheduledNotifications(scheduledNotifications);
+
+  console.log(`[NotificationService] Scheduled notificationId=${notificationId} saved`);
 };
 
-export const cancelNotification = (id: string) => {
-  console.log(`[NotificationService] Canceling notification id=${id}`);
-  PushNotification.cancelLocalNotification(id.toString());
+export const cancelNotification = async (noteId: string) => {
+  const notificationId = scheduledNotifications[noteId];
+  if (notificationId) {
+    console.log(`[NotificationService] Canceling notification for noteId=${noteId} with notificationId=${notificationId}`);
+    await notifee.cancelNotification(notificationId);
+    delete scheduledNotifications[noteId];
+    await saveScheduledNotifications(scheduledNotifications);
+  } else {
+    console.warn(`[NotificationService] No notification found for noteId=${noteId}`);
+  }
+};
 
+export const createNotificationChannel = async () => {
+  const channelId = await notifee.createChannel({
+    id: 'reminder-channel',
+    name: 'Reminder Notifications',
+    importance: 4,
+    vibration: true,
+  });
+  console.log('[NotificationService] Created notification channel:', channelId);
+  return channelId;
 };
