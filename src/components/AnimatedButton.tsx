@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, StyleSheet, Pressable } from 'react-native';
+import { Text, StyleSheet, Pressable, ViewStyle, StyleProp } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -10,9 +10,18 @@ import Animated, {
 interface AnimatedButtonProps {
   title: string;
   onPress: () => void;
+  backgroundColor?: string;
+  color?: string;
+  style?: StyleProp<ViewStyle>;
 }
 
-export default function AnimatedButton({ title, onPress }: AnimatedButtonProps) {
+export default function AnimatedButton({
+  title,
+  onPress,
+  backgroundColor = '#007bff',
+  color = '#fff',
+  style,
+}: AnimatedButtonProps) {
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -32,10 +41,10 @@ export default function AnimatedButton({ title, onPress }: AnimatedButtonProps) 
       onPress={onPress}
       onPressIn={onPressIn}
       onPressOut={onPressOut}
-      style={{ alignSelf: 'center' }}
+      style={[{ alignSelf: 'center' }, style]}
     >
-      <Animated.View style={[styles.button, animatedStyle]}>
-        <Text style={styles.text}>{title}</Text>
+      <Animated.View style={[styles.button, { backgroundColor }, animatedStyle]}>
+        <Text style={[styles.text, { color }]}>{title}</Text>
       </Animated.View>
     </Pressable>
   );
@@ -43,14 +52,13 @@ export default function AnimatedButton({ title, onPress }: AnimatedButtonProps) 
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: '#007bff',
     paddingVertical: 12,
     paddingHorizontal: 30,
     borderRadius: 25,
   },
   text: {
-    color: 'white',
     fontWeight: '600',
     fontSize: 16,
+    textAlign: 'center',
   },
 });
