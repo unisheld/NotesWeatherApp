@@ -23,15 +23,19 @@ export const reverseGeocode = async (lat: number, lon: number): Promise<string |
     );
 
     const data = res.data;
-    if (data && data.length > 0) {
-      if (data[0].local_names && data[0].local_names.en) {
-        return data[0].local_names.en;
+    if (Array.isArray(data) && data.length > 0) {
+      const location = data[0];
+      if (location?.local_names?.en) {
+        return location.local_names.en;
       }
-      return data[0].name;
+      if (location?.name) {
+        return location.name;
+      }
     }
+
     return null;
-  } catch (error) {    
-    console.warn('reverseGeocode error:', error);
+  } catch (error: any) {
+    console.warn('reverseGeocode error:', error?.response?.data || error.message);
     return null;
   }
 };

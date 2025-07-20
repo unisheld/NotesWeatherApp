@@ -179,15 +179,16 @@ export default function WeatherScreen() {
         <WeatherMap
           selectedCoords={selectedCoords}
           onPress={onMapPress}
-          onMarkerDragEnd={async (coords) => {
+          onMarkerDragEnd={async (coords: { latitude: number; longitude: number }) => {
             setSelectedCoords(coords);
+
             const cityName = await reverseGeocode(coords.latitude, coords.longitude);
+            console.log('reverseGeocode cityName:', cityName);
             if (cityName) {
               setInputCity(cityName);
-              await loadWeatherByCity(cityName);
-            } else {
-              await loadWeatherByMapCoords(coords.latitude, coords.longitude);
             }
+
+            await loadWeatherByMapCoords(coords.latitude, coords.longitude);
           }}
         />
 
