@@ -15,3 +15,23 @@ export const fetchWeatherByCity = async (city: string) => {
   );
   return res.data;
 };
+
+export const reverseGeocode = async (lat: number, lon: number): Promise<string | null> => {
+  try {
+    const res = await axios.get(
+      `https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${API_KEY}`
+    );
+
+    const data = res.data;
+    if (data && data.length > 0) {
+      if (data[0].local_names && data[0].local_names.en) {
+        return data[0].local_names.en;
+      }
+      return data[0].name;
+    }
+    return null;
+  } catch (error) {    
+    console.warn('reverseGeocode error:', error);
+    return null;
+  }
+};
