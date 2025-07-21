@@ -14,17 +14,12 @@ import { MapPressEvent, LatLng } from 'react-native-maps';
 import { useDispatch, useSelector } from 'react-redux';
 
 import {
-  fetchWeatherStart,
-  fetchWeatherSuccess,
-  fetchWeatherFailure,
+  fetchWeatherByCity,
+  fetchWeatherByCoords,
+  fetchCityByCoords,
   setCity,
 } from '../redux/weatherSlice';
 import { RootState, AppDispatch } from '../redux/store';
-import {
-  fetchWeatherByCity,
-  fetchWeatherByCoords,
-  reverseGeocode,
-} from '../api/weatherApi';
 
 import AnimatedButton from '../components/AnimatedButton';
 import { useTheme } from '../theme/useTheme';
@@ -40,117 +35,92 @@ export default function WeatherScreen() {
   const theme = useTheme();
   const styles = createStyles(theme);
 
-  const [inputCity, setInputCity] = useState(city ?? '');
+  const [inputCity, setInputCity] = useState<string>(city ?? '');
   const [selectedCoords, setSelectedCoords] = useState<LatLng | null>(null);
 
   const loadWeatherByLocation = async () => {
     const granted = await requestLocationPermission();
-    if (!granted) {
-      dispatch(fetchWeatherFailure('Location permission not granted'));
+    if (!granted) {      
       console.error('Permission denied: Location permission is required to get weather for your location.');
       return;
     }
 
-    dispatch(fetchWeatherStart());
-
     Geolocation.getCurrentPosition(
-      async (position) => {
+      async (position: Geolocation.GeoPosition) => {
         try {
-          const data = await fetchWeatherByCoords(
-            position.coords.latitude,
-            position.coords.longitude,
-          );
-          dispatch(fetchWeatherSuccess(data));
-          dispatch(setCity(data.name));
-          setInputCity(data.name);
+          await dispatch(
+            fetchWeatherByCoords({
+              lat: position.coords.latitude,
+              lon: position.coords.longitude,
+            }),
+          ).unwrap();
+
           setSelectedCoords({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           });
-        } catch (e: unknown) {
-          if (e instanceof Error) {
-            dispatch(fetchWeatherFailure(e.message));
-            console.error('Error fetching weather:', e.message);
-          } else {
-            dispatch(fetchWeatherFailure('Error fetching weather'));
-            console.error('Failed to fetch weather data for current location.');
+
+          const cityName = await dispatch(
+            fetchCityByCoords({
+              lat: position.coords.latitude,
+              lon: position.coords.longitude,
+            }),
+          ).unwrap();
+
+          if (cityName) {
+            setInputCity(cityName);
+            dispatch(setCity(cityName));
           }
+        } catch (e: any) {
+          console.error('Error fetching weather or city by location:', e);
         }
       },
-      (error) => {
-        dispatch(fetchWeatherFailure(error.message));
+      (error: Geolocation.GeoError) => {
         console.error('Geolocation error:', error.message);
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
     );
   };
 
-  const loadWeatherByCity = async (cityNameParam?: string) => {
+  const loadWeatherByCityName = async (cityNameParam?: string) => {
     const cityName = cityNameParam ?? inputCity.trim();
     if (!cityName) {
-      dispatch(fetchWeatherFailure('Please enter a city name'));
       console.error('Validation error: Please enter a city name');
       return;
     }
 
-    dispatch(fetchWeatherStart());
-
     try {
-      const data = await fetchWeatherByCity(cityName);
-      dispatch(fetchWeatherSuccess(data));
-      dispatch(setCity(cityName));
-      setSelectedCoords({
-        latitude: data.coord.lat,
-        longitude: data.coord.lon,
-      });
+      await dispatch(fetchWeatherByCity(cityName)).unwrap();
+      
+      const currentState = (await dispatch(fetchWeatherByCity(cityName)).unwrap()) as any;
       setInputCity(cityName);
-    } catch (e: unknown) {
-      if (selectedCoords) {
-        await loadWeatherByMapCoords(selectedCoords.latitude, selectedCoords.longitude);
-      } else if (e instanceof Error) {
-        dispatch(fetchWeatherFailure(e.message));
-        console.error('Error fetching weather by city:', e.message);
-      } else {
-        dispatch(fetchWeatherFailure('City not found'));
-        console.error('City not found');
-      }
+      setSelectedCoords({
+        latitude: currentState.coord.lat,
+        longitude: currentState.coord.lon,
+      });
+    } catch (e: any) {
+      console.error('Error fetching weather by city:', e);
     }
   };
 
   const loadWeatherByMapCoords = async (lat: number, lon: number) => {
-    dispatch(fetchWeatherStart());
-
     try {
-      const data = await fetchWeatherByCoords(lat, lon);
-      dispatch(fetchWeatherSuccess(data));
-      dispatch(setCity(data.name));
-      setInputCity(data.name);
+      await dispatch(fetchWeatherByCoords({ lat, lon })).unwrap();
       setSelectedCoords({ latitude: lat, longitude: lon });
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        dispatch(fetchWeatherFailure(e.message));
-        console.error('Error fetching weather from map:', e.message);
-      } else {
-        dispatch(fetchWeatherFailure('Error fetching weather from map'));
-        console.error('Failed to fetch weather data for selected location.');
+
+      const cityName = await dispatch(fetchCityByCoords({ lat, lon })).unwrap();
+      if (cityName) {
+        setInputCity(cityName);
+        dispatch(setCity(cityName));
       }
+    } catch (e: any) {
+      console.error('Error fetching weather or city by map coords:', e);
     }
   };
 
   const onMapPress = async (event: MapPressEvent) => {
     const { latitude, longitude } = event.nativeEvent.coordinate;
-
-    const cityName = await reverseGeocode(latitude, longitude);
-    console.log('reverseGeocode cityName:', cityName);
-
-    if (cityName) {
-      setInputCity(cityName);
-      setSelectedCoords({ latitude, longitude });
-      await loadWeatherByCity(cityName);
-    } else {
-      setSelectedCoords({ latitude, longitude });
-      await loadWeatherByMapCoords(latitude, longitude);
-    }
+    await loadWeatherByMapCoords(latitude, longitude);
   };
 
   useEffect(() => {
@@ -173,21 +143,14 @@ export default function WeatherScreen() {
           onChangeText={setInputCity}
           style={styles.input}
           returnKeyType='search'
-          onSubmitEditing={() => loadWeatherByCity()}
+          onSubmitEditing={() => loadWeatherByCityName()}
         />
 
         <WeatherMap
           selectedCoords={selectedCoords}
           onPress={onMapPress}
-          onMarkerDragEnd={async (coords: { latitude: number; longitude: number }) => {
+          onMarkerDragEnd={async (coords: LatLng) => {
             setSelectedCoords(coords);
-
-            const cityName = await reverseGeocode(coords.latitude, coords.longitude);
-            console.log('reverseGeocode cityName:', cityName);
-            if (cityName) {
-              setInputCity(cityName);
-            }
-
             await loadWeatherByMapCoords(coords.latitude, coords.longitude);
           }}
         />
@@ -195,7 +158,7 @@ export default function WeatherScreen() {
         <View style={styles.buttonsRow}>
           <AnimatedButton
             title='Search'
-            onPress={() => loadWeatherByCity()}
+            onPress={() => loadWeatherByCityName()}
             backgroundColor={theme.primary}
             color='#fff'
             style={{ flex: 1, marginRight: 10 }}
