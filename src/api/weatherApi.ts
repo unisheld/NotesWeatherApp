@@ -1,10 +1,10 @@
 import axios from 'axios';
-import { OPENWEATHER_API_KEY, OPENWEATHER_BASE_URL } from '@env';
+import Config from 'react-native-config';
 
 const weatherInstance = axios.create({
-  baseURL: OPENWEATHER_BASE_URL,
+  baseURL: Config.OPENWEATHER_BASE_URL,
   params: {
-    appid: OPENWEATHER_API_KEY,
+    appid: Config.OPENWEATHER_API_KEY,
     units: 'metric',
   },
 });
@@ -12,7 +12,7 @@ const weatherInstance = axios.create({
 const geoInstance = axios.create({
   baseURL: 'https://api.openweathermap.org/geo/1.0',
   params: {
-    appid: OPENWEATHER_API_KEY,
+    appid: Config.OPENWEATHER_API_KEY,
   },
 });
 

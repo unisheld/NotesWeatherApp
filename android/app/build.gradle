@@ -1,6 +1,9 @@
     apply plugin: "com.android.application"
     apply plugin: "org.jetbrains.kotlin.android"
     apply plugin: "com.facebook.react"
+    apply plugin: "com.google.gms.google-services"
+    apply from: project(':react-native-config').projectDir.getPath() + "/dotenv.gradle"
+
 
     /**
     * This is the configuration block to customize your React Native Android app.
@@ -83,8 +86,11 @@
             minSdkVersion rootProject.ext.minSdkVersion
             targetSdkVersion rootProject.ext.targetSdkVersion
             versionCode 1
-            versionName "1.0"
-            resValue "string", "google_maps_api_key", "\"${System.getenv('GOOGLE_MAPS_API_KEY')}\""
+            versionName "1.0"     
+
+            resValue "string", "google_maps_api_key", project.env.get("GOOGLE_MAPS_API_KEY")   
+            resValue "string", "OPENWEATHER_API_KEY", project.env.get("OPENWEATHER_API_KEY")
+            resValue "string", "OPENWEATHER_BASE_URL", project.env.get("OPENWEATHER_BASE_URL")
         }
         signingConfigs {
             debug {
@@ -109,6 +115,8 @@
     }
 
     dependencies {
+        implementation platform('com.google.firebase:firebase-bom:33.16.0')
+        implementation 'com.google.firebase:firebase-analytics'
         implementation "com.google.android.gms:play-services-location:21.0.1"
 
         // The version of react-native is set by the React Native Gradle Plugin
