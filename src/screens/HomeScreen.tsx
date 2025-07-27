@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   FlatList,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Text,
   ListRenderItemInfo,
@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Modal from 'react-native-modal';
 
 import { RootState, AppDispatch } from '../redux/store';
 import { deleteNote, setNotes } from '../redux/notesSlice';
@@ -22,14 +23,10 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import NoteItem from '../components/NoteItem';
 import AnimatedButton from '../components/AnimatedButton';
 import { useTheme } from '../theme/useTheme';
+import { Note, NoteType } from '../redux/notesSlice';
+import uuid from 'react-native-uuid';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
-
-interface Note {
-  id: string;
-  content: string;
-  type?: string;
-}
 
 export default function HomeScreen() {
   const navigation = useNavigation<NavigationProp>();
@@ -37,8 +34,10 @@ export default function HomeScreen() {
   const userEmail = useSelector((state: RootState) => state.auth.user?.email || 'Guest');
   const dispatch = useDispatch<AppDispatch>();
   const theme = useTheme();
-  
+
   const styles = createStyles(theme);
+
+  const [isModalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -52,7 +51,7 @@ export default function HomeScreen() {
   useEffect(() => {
     AsyncStorage.setItem('notes', JSON.stringify(notes));
   }, [notes]);
- 
+
   const handleDelete = (id: string) => {
     dispatch(deleteNote(id));
   };
@@ -61,21 +60,44 @@ export default function HomeScreen() {
     await dispatch(logoutUser());
   };
 
+  const handleLongPressOnList = () => {
+    setModalVisible(true);
+  };
+
+  const handleSelectNoteType = (type: NoteType) => {
+    setModalVisible(false);
+
+    const newNote: Note = {
+      id: uuid.v4().toString(),
+      type,
+      content: '',
+      reminderDate: type === 'reminder' ? new Date().toISOString() : undefined,
+      images: type === 'image' ? [] : undefined,
+      sketchData: type === 'sketch' ? '' : undefined,
+    };
+
+    navigation.navigate('NoteEditor', { noteId: undefined, noteType: type, newNote });
+  };
+
+  const openNoteEditor = (type: NoteType, id: string) => {
+    navigation.navigate('NoteEditor', { noteId: id, noteType: type });
+  };
+
   const renderItem = ({ item }: ListRenderItemInfo<Note>) => (
-    <Animated.View
-      entering={FadeInDown}
-      style={[styles.noteRow, styles.noteRowBackground]}
-    >
-      <TouchableOpacity
-        onPress={() => navigation.navigate('NoteEditor', { noteId: item.id })}
+    <Animated.View entering={FadeInDown} style={[styles.noteRow, styles.noteRowBackground]}>
+      <Pressable
+        onPress={() => openNoteEditor(item.type, item.id)}
+        onLongPress={handleLongPressOnList}
         style={styles.noteTouchable}
       >
         <NoteItem
           id={item.id}
           content={item.content}
-          isReminder={item.type === 'reminder'}
+          type={item.type}
+          images={item.images}
+          sketchData={item.sketchData}
         />
-      </TouchableOpacity>
+      </Pressable>
       <AnimatedButton
         title="Delete"
         onPress={() => handleDelete(item.id)}
@@ -97,45 +119,91 @@ export default function HomeScreen() {
       <View style={styles.controlsWrapper}>
         <View style={styles.buttonRow}>
           <AnimatedButton
-            title="Add Note"
-            onPress={() => navigation.navigate({ name: 'NoteEditor', params: {} })}
-            backgroundColor={theme.primary}
-            color="#fff"
-            style={styles.flexButton}
-          />
-          <AnimatedButton
             title="Weather"
             onPress={() => navigation.navigate('Weather')}
             backgroundColor={theme.primary}
             color="#fff"
             style={styles.flexButton}
           />
-        </View>
-
-        <View style={styles.themeToggleWrapper}>
           <AnimatedButton
             title="Toggle Theme"
             onPress={() => dispatch(toggleTheme())}
             backgroundColor={theme.primary}
             color="#fff"
-            style={styles.themeButton}
+            style={styles.flexButton}
           />
+        </View>
+
+        <View style={styles.buttonRow}>
           <AnimatedButton
             title="Logout"
             onPress={handleLogout}
             backgroundColor="#999"
             color="#fff"
-            style={[styles.themeButton, { marginTop: 12 }]}
+            style={styles.flexButton}
           />
         </View>
       </View>
 
-      <FlatList
-        data={notes}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.notesList}
-        renderItem={renderItem}
-      />
+      {notes.length === 0 ? (
+        <Pressable
+          onLongPress={handleLongPressOnList}
+          style={styles.emptyContainer}
+        >
+          <Text style={[styles.emptyText, { color: theme.text }]}>
+            No notes yet. Long press anywhere to create a new one.
+          </Text>
+        </Pressable>
+      ) : (
+        <FlatList
+          data={notes}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.notesList}
+          renderItem={renderItem}
+        />
+      )}
+
+      <Modal
+        isVisible={isModalVisible}
+        onBackdropPress={() => setModalVisible(false)}
+        backdropOpacity={0.4}
+        animationIn="zoomIn"
+        animationOut="zoomOut"
+        useNativeDriver
+        style={styles.modalWrapper}
+      >
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Select Note Type</Text>
+          <AnimatedButton
+            title="Note"
+            onPress={() => handleSelectNoteType('text')}
+            backgroundColor={theme.primary}
+            color="#fff"
+            style={styles.modalButton}
+          />
+          <AnimatedButton
+            title="Reminder"
+            onPress={() => handleSelectNoteType('reminder')}
+            backgroundColor={theme.primary}
+            color="#fff"
+            style={styles.modalButton}
+          />
+          <AnimatedButton
+            title="Sketch"
+            onPress={() => handleSelectNoteType('sketch')}
+            backgroundColor={theme.primary}
+            color="#fff"
+            style={styles.modalButton}
+          />
+          <AnimatedButton
+            title="Image"
+            onPress={() => handleSelectNoteType('image')}
+            backgroundColor={theme.primary}
+            color="#fff"
+            style={styles.modalButton}
+          />
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -154,7 +222,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     userText: {
       fontSize: 16,
       fontWeight: '500',
-      color: theme.text,
     },
     controlsWrapper: {
       marginVertical: 16,
@@ -170,15 +237,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       flex: 1,
       borderRadius: 12,
       paddingVertical: 14,
-    },
-    themeToggleWrapper: {
-      marginTop: 12,
-      alignItems: 'center',
-    },
-    themeButton: {
-      width: '50%',
-      borderRadius: 12,
-      paddingVertical: 14,
+      marginHorizontal: 4,
     },
     notesList: {
       paddingTop: 12,
@@ -189,7 +248,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: 'center',
       marginBottom: 12,
       borderRadius: 12,
-      overflow: 'hidden',      
+      overflow: 'hidden',
       shadowColor: '#000',
       shadowOpacity: 0.1,
       shadowRadius: 5,
@@ -198,6 +257,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     noteRowBackground: {
       backgroundColor: theme.background === '#ffffff' ? '#f8f8f8' : '#222',
+      flex: 1,
     },
     noteTouchable: {
       flex: 1,
@@ -207,5 +267,39 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     deleteButton: {
       marginRight: 8,
       paddingHorizontal: 16,
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    emptyText: {
+      fontSize: 16,
+      fontStyle: 'italic',
+      textAlign: 'center',
+    },
+    modalContent: {
+      backgroundColor: theme.background,
+      padding: 24,
+      borderRadius: 16,
+      alignItems: 'center',
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: theme.text,
+      marginBottom: 16,
+    },
+    modalButton: {
+      marginVertical: 8,
+      borderRadius: 12,
+      paddingVertical: 14,
+      width: 200,
+    },
+    modalWrapper: {
+      justifyContent: 'center',
+      alignItems: 'center',
+      margin: 0, 
     },
   });

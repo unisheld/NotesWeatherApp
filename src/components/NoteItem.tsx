@@ -1,5 +1,12 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  Image,
+  ScrollView,
+} from 'react-native';
 import Animated, {
   useSharedValue,
   withRepeat,
@@ -9,22 +16,40 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
+import { NoteType } from '../redux/notesSlice';
 
 interface NoteItemProps {
-  content: string;
-  isReminder: boolean;
   id: string;
+  content: string;
+  type: NoteType;
+  images?: string[];
+  sketchData?: string;
+  reminderDate?: string;
 }
 
-export default function NoteItem({ content, isReminder, id }: NoteItemProps) {
+export default function NoteItem({
+  id,
+  content,
+  type,
+  images,
+  sketchData,
+  reminderDate,
+}: NoteItemProps) {
   const pulse = useSharedValue(1);
-  const notificationTriggeredId = useSelector((state: RootState) => state.notes.notificationTriggeredId);
+
+  const notificationTriggeredId = useSelector(
+    (state: RootState) => state.notes.notificationTriggeredId
+  );
   const isNotificationActive = notificationTriggeredId === id;
+  const isReminder = type === 'reminder';
 
   useEffect(() => {
     if (isReminder || isNotificationActive) {
       pulse.value = withRepeat(
-        withTiming(1.1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1.05, {
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+        }),
         -1,
         true
       );
@@ -39,11 +64,54 @@ export default function NoteItem({ content, isReminder, id }: NoteItemProps) {
 
   return (
     <Animated.View style={[styles.container, animatedStyle]}>
-      <Text style={styles.content} numberOfLines={5} ellipsizeMode="tail">
-        {content}
-      </Text>
-      {isReminder && <Text style={styles.reminderText}>Reminder</Text>}
-      {isNotificationActive && <Text style={styles.notificationText}>Notified!</Text>}
+      <Text style={styles.typeLabel}>{type.toUpperCase()}</Text>
+
+      {(type === 'text' || type === 'reminder' || type === 'image') && (
+        <Text style={styles.content}>{content}</Text>
+      )}
+
+      {isReminder && (
+        <Text style={styles.reminderLabel}>Reminder</Text>
+      )}
+
+      {type === 'reminder' && reminderDate && (
+        <View>         
+          {isNotificationActive && (
+            <Text style={styles.notificationText}>Notified!</Text>
+          )}
+        </View>
+      )}
+
+      {type === 'image' && images && images.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginTop: 6 }}
+        >
+          {images.map((uri, idx) => (
+            <Image
+              key={idx}
+              source={{ uri }}
+              style={styles.image}
+              resizeMode="cover"
+            />
+          ))}
+        </ScrollView>
+      )}
+
+      {type === 'sketch' ? (
+        sketchData ? (
+          <Image
+            source={{ uri: sketchData }}
+            style={styles.sketch}
+            resizeMode="contain"
+          />
+        ) : (
+          <View style={[styles.sketch, styles.sketchPlaceholder]}>
+            <Text style={styles.placeholderText}>No sketch available</Text>
+          </View>
+        )
+      ) : null}
     </Animated.View>
   );
 }
@@ -59,21 +127,54 @@ const styles = StyleSheet.create({
     maxWidth: Dimensions.get('window').width - 32,
     alignSelf: 'center',
   },
+  typeLabel: {
+    fontSize: 12,
+    color: '#888',
+    marginBottom: 4,
+    fontWeight: '600',
+  },
   content: {
     fontSize: 14,
     color: '#333',
-    flexShrink: 1,
   },
-  reminderText: {
+  reminderLabel: {
     marginTop: 4,
     color: '#d9534f',
     fontWeight: 'bold',
     fontSize: 12,
   },
-  notificationText: {
+  reminder: {
+    fontSize: 13,
+    color: '#f57c00',
     marginTop: 4,
-    color: '#5bc0de',
+  },
+  notificationText: {
+    fontSize: 13,
+    color: '#007aff',
+    marginTop: 2,
     fontWeight: '600',
-    fontSize: 12,
+  },
+  image: {
+    width: 120,
+    height: 120,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  sketch: {
+    width: '100%',
+    height: 140,
+    borderRadius: 8,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  sketchPlaceholder: {
+    justifyContent: 'center',
+    backgroundColor: '#f0f0f0',
+  },
+  placeholderText: {
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 60,
   },
 });

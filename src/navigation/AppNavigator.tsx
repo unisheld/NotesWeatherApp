@@ -9,9 +9,10 @@ import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 
 import { RootState } from '../redux/store';
+import { Note, NoteType } from '../redux/notesSlice';
 export type RootStackParamList = {
   Home: undefined;
-  NoteEditor: { noteId?: string };
+  NoteEditor: { noteId?: string; noteType?: NoteType; newNote?: Note; };
   Weather: undefined;
   Login: undefined;
   Register: undefined;

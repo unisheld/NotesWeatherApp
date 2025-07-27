@@ -1,15 +1,19 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
+export type NoteType = 'text' | 'reminder' | 'image' | 'sketch';
+
 export interface Note {
   id: string;
-  type: 'text' | 'reminder';
+  type: NoteType;
   content: string;
   reminderDate?: string;
+  images?: string[]; 
+  sketchData?: string; 
 }
 
 interface NotesState {
   notes: Note[];
-  notificationTriggeredId: string | null; 
+  notificationTriggeredId: string | null;
 }
 
 const initialState: NotesState = {
@@ -26,7 +30,9 @@ const notesSlice = createSlice({
     },
     updateNote: (state, action: PayloadAction<Note>) => {
       const index = state.notes.findIndex(n => n.id === action.payload.id);
-      if (index !== -1) state.notes[index] = action.payload;
+      if (index !== -1) {
+        state.notes[index] = action.payload;
+      }
     },
     deleteNote: (state, action: PayloadAction<string>) => {
       state.notes = state.notes.filter(n => n.id !== action.payload);
