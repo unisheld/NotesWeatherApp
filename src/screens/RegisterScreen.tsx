@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../redux/store';
 import { registerUser } from '../redux/authSlice';
@@ -26,6 +27,7 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState<'user' | 'editor' | 'admin'>('user');
 
   const handleRegister = () => {
     if (password !== confirmPassword) {
@@ -36,7 +38,7 @@ export default function RegisterScreen() {
       Alert.alert('Registration Error', 'Password must be at least 6 characters');
       return;
     }
-    dispatch(registerUser({ email, password }));
+    dispatch(registerUser({ email, password, role }));
   };
 
   useEffect(() => {
@@ -79,7 +81,23 @@ export default function RegisterScreen() {
         secureTextEntry
         style={styles.input}
       />
+
+      <Text style={styles.label}>Select Role:</Text>
+      <View style={styles.pickerWrapper}>
+        <Picker
+          selectedValue={role}
+          onValueChange={(itemValue) => setRole(itemValue as 'user' | 'editor' | 'admin')}
+          mode="dropdown"
+          style={styles.picker}
+        >
+          <Picker.Item label="User" value="user" />
+          <Picker.Item label="Editor" value="editor" />
+          <Picker.Item label="Admin" value="admin" />
+        </Picker>
+      </View>
+
       <Button title={loading ? 'Creating...' : 'Register'} onPress={handleRegister} disabled={loading} />
+
       <Text style={styles.link} onPress={() => navigation.navigate('Login')}>
         Already have an account? Login
       </Text>
@@ -99,6 +117,21 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     padding: 10,
     borderRadius: 5,
+  },
+  pickerWrapper: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 5,
+    marginBottom: 15,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 50,
+    width: '100%',
+  },
+  label: {
+    marginBottom: 4,
+    fontWeight: '600',
   },
   link: {
     marginTop: 20,

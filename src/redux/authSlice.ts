@@ -1,9 +1,13 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+
+type UserRole = 'admin' | 'editor' | 'user';
 
 interface AuthUser {
   uid: string;
   email: string | null;
+  role: UserRole;
 }
 
 interface AuthState {
@@ -18,39 +22,55 @@ const initialState: AuthState = {
   error: null,
 };
 
-export const registerUser = createAsyncThunk(
+const validateRole = (role: any): UserRole =>
+  ['admin', 'editor', 'user'].includes(role) ? (role as UserRole) : 'user';
+
+export const registerUser = createAsyncThunk<
+  AuthUser,
+  { email: string; password: string; role: UserRole },
+  { rejectValue: string }
+>(
   'auth/register',
-  async (
-    { email, password }: { email: string; password: string },
-    { rejectWithValue }
-  ) => {
+  async ({ email, password, role }, { rejectWithValue }) => {
     try {
       const userCredential = await auth().createUserWithEmailAndPassword(email, password);
       const { uid, email: userEmail } = userCredential.user;
-      return { uid, email: userEmail };
+
+      await firestore().collection('users').doc(uid).set({
+        email: userEmail,
+        role,
+      });
+
+      return { uid, email: userEmail, role };
     } catch (err: any) {
       return rejectWithValue(err.message);
     }
   }
 );
 
-export const loginUser = createAsyncThunk(
+export const loginUser = createAsyncThunk<
+  AuthUser,
+  { email: string; password: string },
+  { rejectValue: string }
+>(
   'auth/login',
-  async (
-    { email, password }: { email: string; password: string },
-    { rejectWithValue }
-  ) => {
+  async ({ email, password }, { rejectWithValue }) => {
     try {
       const userCredential = await auth().signInWithEmailAndPassword(email, password);
       const { uid, email: userEmail } = userCredential.user;
-      return { uid, email: userEmail };
+
+      const userDoc = await firestore().collection('users').doc(uid).get();
+      const userData = userDoc.data();
+      const role = validateRole(userData?.role);
+
+      return { uid, email: userEmail, role };
     } catch (err: any) {
       return rejectWithValue(err.message);
     }
   }
 );
 
-export const logoutUser = createAsyncThunk(
+export const logoutUser = createAsyncThunk<void, void, { rejectValue: string }>(
   'auth/logout',
   async (_, { rejectWithValue }) => {
     try {
@@ -61,14 +81,22 @@ export const logoutUser = createAsyncThunk(
   }
 );
 
-export const checkAuthState = createAsyncThunk(
+export const checkAuthState = createAsyncThunk<AuthUser | null, void, { rejectValue: string }>(
   'auth/checkAuthState',
-  async (_, { }) => {
+  async (_, { rejectWithValue }) => {
     return new Promise<AuthUser | null>((resolve) => {
-      const unsubscribe = auth().onAuthStateChanged((user) => {
+      const unsubscribe = auth().onAuthStateChanged(async (user) => {
         unsubscribe();
         if (user) {
-          resolve({ uid: user.uid, email: user.email });
+          try {
+            const doc = await firestore().collection('users').doc(user.uid).get();
+            const data = doc.data();
+            const role = validateRole(data?.role);
+            resolve({ uid: user.uid, email: user.email, role });
+          } catch (e) {
+            console.error('Failed to fetch user document:', e);
+            resolve(null);
+          }
         } else {
           resolve(null);
         }
@@ -96,7 +124,7 @@ const authSlice = createSlice({
         state.loading = false;
       })
       .addCase(registerUser.rejected, (state, action) => {
-        state.error = action.payload as string;
+        state.error = action.payload ?? 'Registration failed';
         state.loading = false;
       })
 
@@ -109,7 +137,7 @@ const authSlice = createSlice({
         state.loading = false;
       })
       .addCase(loginUser.rejected, (state, action) => {
-        state.error = action.payload as string;
+        state.error = action.payload ?? 'Login failed';
         state.loading = false;
       })
 
@@ -117,7 +145,7 @@ const authSlice = createSlice({
         state.user = null;
       })
       .addCase(logoutUser.rejected, (state, action) => {
-        state.error = action.payload as string;
+        state.error = action.payload ?? 'Logout failed';
       })
 
       .addCase(checkAuthState.pending, (state) => {
@@ -128,7 +156,7 @@ const authSlice = createSlice({
         state.loading = false;
       })
       .addCase(checkAuthState.rejected, (state, action) => {
-        state.error = action.payload as string;
+        state.error = action.payload ?? 'Auth check failed';
         state.loading = false;
       });
   },

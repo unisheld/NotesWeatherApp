@@ -22,10 +22,12 @@ import {
 } from '../services/notificationService';
 
 import AnimatedButton from '../components/AnimatedButton';
-import { useTheme } from '../theme/useTheme';
+import { useTheme } from '../hooks/useTheme';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import CircularTimePicker from '../components/CircularTimePicker';
+
+import { useRoleGuard } from '../hooks/useRoleGuard';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NoteEditor'>;
 
@@ -36,6 +38,8 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
   const note = useSelector((state: RootState) =>
     state.notes.notes.find(n => n.id === noteId)
   );
+
+  const canEdit = useRoleGuard('editor');
 
   const theme = useTheme();
   const styles = createStyles(theme);
@@ -59,6 +63,7 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
   }, []);
 
   const handleImagePick = async () => {
+    if (!canEdit) return;
     const result = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 1 });
     if (result.assets?.length) {
       const uri = result.assets[0]?.uri;
@@ -69,6 +74,7 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
   };
 
   const handleSketchSave = (data: string) => {
+    if (!canEdit) return;
     if (pendingSketchPromiseRef.current) {
       pendingSketchPromiseRef.current.resolve(data);
       pendingSketchPromiseRef.current = null;
@@ -84,15 +90,18 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
   };
 
   const saveNote = async () => {
+    if (!canEdit) return;
+
     let finalSketchData = sketchData;
     if (noteType === 'sketch') {
       try {
         finalSketchData = await getSketchDataAsync();
       } catch (e) {
-        console.error('Error to getting sketch', e);
+        console.error('Error getting sketch data', e);
         return;
       }
     }
+
     const id = noteId ?? uuid.v4().toString();
 
     const newNote: Note = {
@@ -114,7 +123,6 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
     if (noteType === 'reminder' && reminderDate > new Date()) {
       scheduleNotification(id, content || 'Reminder', reminderDate);
     }
-    
 
     navigation.goBack();
   };
@@ -132,9 +140,10 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
             placeholder="Note content"
             placeholderTextColor={theme.text + '99'}
             value={content}
-            onChangeText={setContent}
+            onChangeText={canEdit ? setContent : undefined}
             multiline
-            style={styles.input}
+            style={[styles.input, !canEdit && { backgroundColor: '#555' }]}
+            editable={canEdit}
           />
         )}
 
@@ -151,19 +160,23 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
                 <TouchableOpacity
                   key={idx}
                   onPress={() => {
+                    if (!canEdit) return;
                     setImages(prev => prev.filter((_, i) => i !== idx));
                   }}
+                  disabled={!canEdit}
                 >
                   <Image source={{ uri }} style={styles.image} />
                 </TouchableOpacity>
               ))}
             </View>
-            <AnimatedButton
-              title="Add Image"
-              onPress={handleImagePick}
-              backgroundColor={theme.primary}
-              color="#fff"
-            />
+            {canEdit && (
+              <AnimatedButton
+                title="Add Image"
+                onPress={handleImagePick}
+                backgroundColor={theme.primary}
+                color="#fff"
+              />
+            )}
             <Text style={styles.imageHint}>Tap image to remove</Text>
           </>
         )}
@@ -180,17 +193,33 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
                 dataURL={sketchData}
                 webStyle={`.m-signature-pad--footer {display: none;}`}
               />
+              {!canEdit && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.2)',
+                    zIndex: 10,
+                  }}
+                  pointerEvents="none"
+                />
+              )}
             </View>
-            <AnimatedButton
-              title="Clear Sketch"
-              onPress={() => {
-                sigRef.current?.clearSignature();
-                setSketchData(undefined);
-              }}
-              backgroundColor="#ff4d4d"
-              color="#fff"
-              style={{ marginTop: 12, borderRadius: 12 }}
-            />
+            {canEdit && (
+              <AnimatedButton
+                title="Clear Sketch"
+                onPress={() => {
+                  sigRef.current?.clearSignature();
+                  setSketchData(undefined);
+                }}
+                backgroundColor="#ff4d4d"
+                color="#fff"
+                style={{ marginTop: 12, borderRadius: 12 }}
+              />
+            )}
           </View>
         )}
 
@@ -198,7 +227,7 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
           <AnimatedButton
             title="Save"
             onPress={saveNote}
-            backgroundColor={theme.primary}
+            backgroundColor={canEdit ? theme.primary : '#666'}
             color="#fff"
           />
         </View>
@@ -218,8 +247,7 @@ const createStyles = (theme: any) =>
       borderWidth: 1,
       borderColor: theme.text,
       color: theme.text,
-      backgroundColor:
-        theme.background === '#ffffff' ? '#fff' : '#1e1e1e',
+      backgroundColor: theme.background === '#ffffff' ? '#fff' : '#1e1e1e',
       padding: 12,
       minHeight: 120,
       borderRadius: 12,
@@ -259,5 +287,4 @@ const createStyles = (theme: any) =>
       fontSize: 12,
       marginTop: 4,
     },
-
   });

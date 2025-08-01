@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   ListRenderItemInfo,
+  Alert,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,16 +16,18 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Modal from 'react-native-modal';
 
 import { RootState, AppDispatch } from '../redux/store';
-import { deleteNote, setNotes } from '../redux/notesSlice';
+import { deleteNote, setNotes, Note, NoteType } from '../redux/notesSlice';
 import { toggleTheme } from '../redux/themeSlice';
 import { logoutUser } from '../redux/authSlice';
 
 import { RootStackParamList } from '../navigation/AppNavigator';
 import NoteItem from '../components/NoteItem';
 import AnimatedButton from '../components/AnimatedButton';
-import { useTheme } from '../theme/useTheme';
-import { Note, NoteType } from '../redux/notesSlice';
+import { useTheme } from '../hooks/useTheme';
 import uuid from 'react-native-uuid';
+
+import { useRoleGuard } from '../hooks/useRoleGuard';
+import { useIsAdmin } from '../hooks/useIsAdmin';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -34,8 +37,10 @@ export default function HomeScreen() {
   const userEmail = useSelector((state: RootState) => state.auth.user?.email || 'Guest');
   const dispatch = useDispatch<AppDispatch>();
   const theme = useTheme();
-
   const styles = createStyles(theme);
+
+  const canEdit = useRoleGuard('editor');
+  const isAdmin = useIsAdmin();
 
   const [isModalVisible, setModalVisible] = useState(false);
 
@@ -53,6 +58,10 @@ export default function HomeScreen() {
   }, [notes]);
 
   const handleDelete = (id: string) => {
+    if (!canEdit) {
+      Alert.alert('Access denied', 'You do not have permission to delete notes.');
+      return;
+    }
     dispatch(deleteNote(id));
   };
 
@@ -61,6 +70,10 @@ export default function HomeScreen() {
   };
 
   const handleLongPressOnList = () => {
+    if (!canEdit) {
+      Alert.alert('Access denied', 'You do not have permission to create notes.');
+      return;
+    }
     setModalVisible(true);
   };
 
@@ -80,6 +93,10 @@ export default function HomeScreen() {
   };
 
   const openNoteEditor = (type: NoteType, id: string) => {
+    if (!canEdit) {
+      Alert.alert('Access denied', 'You do not have permission to edit notes.');
+      return;
+    }
     navigation.navigate('NoteEditor', { noteId: id, noteType: type });
   };
 
@@ -98,13 +115,15 @@ export default function HomeScreen() {
           sketchData={item.sketchData}
         />
       </Pressable>
-      <AnimatedButton
-        title="Delete"
-        onPress={() => handleDelete(item.id)}
-        backgroundColor="#ff4d4d"
-        color="#fff"
-        style={styles.deleteButton}
-      />
+      {canEdit && (
+        <AnimatedButton
+          title="Delete"
+          onPress={() => handleDelete(item.id)}
+          backgroundColor="#ff4d4d"
+          color="#fff"
+          style={styles.deleteButton}
+        />
+      )}
     </Animated.View>
   );
 
@@ -112,7 +131,7 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <View style={styles.userInfoWrapper}>
         <Text style={[styles.userText, { color: theme.text }]}>
-          Hello, {userEmail}
+          Hello, {userEmail} ({isAdmin ? 'admin' : canEdit ? 'editor' : 'user'})
         </Text>
       </View>
 
@@ -134,6 +153,18 @@ export default function HomeScreen() {
           />
         </View>
 
+        {isAdmin && (
+          <View style={styles.buttonRow}>
+            <AnimatedButton
+              title="Manage Roles"
+              onPress={() => navigation.navigate('RoleManager')}
+              backgroundColor={theme.primary}
+              color="#fff"
+              style={styles.flexButton}
+            />
+          </View>
+        )}
+
         <View style={styles.buttonRow}>
           <AnimatedButton
             title="Logout"
@@ -146,12 +177,9 @@ export default function HomeScreen() {
       </View>
 
       {notes.length === 0 ? (
-        <Pressable
-          onLongPress={handleLongPressOnList}
-          style={styles.emptyContainer}
-        >
+        <Pressable onLongPress={handleLongPressOnList} style={styles.emptyContainer}>
           <Text style={[styles.emptyText, { color: theme.text }]}>
-            No notes yet. Long press anywhere to create a new one.
+            No notes yet. Long press anywhere to create one.
           </Text>
         </Pressable>
       ) : (
@@ -173,7 +201,7 @@ export default function HomeScreen() {
         style={styles.modalWrapper}
       >
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Select Note Type</Text>
+          <Text style={styles.modalTitle}>Choose note type</Text>
           <AnimatedButton
             title="Note"
             onPress={() => handleSelectNoteType('text')}
@@ -300,6 +328,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     modalWrapper: {
       justifyContent: 'center',
       alignItems: 'center',
-      margin: 0, 
+      margin: 0,
     },
   });

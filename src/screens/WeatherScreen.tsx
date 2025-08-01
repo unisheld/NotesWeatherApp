@@ -22,7 +22,7 @@ import {
 import { RootState, AppDispatch } from '../redux/store';
 
 import AnimatedButton from '../components/AnimatedButton';
-import { useTheme } from '../theme/useTheme';
+import { useTheme } from '../hooks/useTheme';
 import WeatherMap from '../components/WeatherMap';
 import { requestLocationPermission } from '../utils/permissions';
 
