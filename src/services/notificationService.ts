@@ -42,11 +42,43 @@ export const configureNotificationEvents = () => {
   });
 };
 
-export const configureNotifications = () => {
-  loadScheduledNotifications().then((loaded) => {
-    scheduledNotifications = loaded;
-    console.log('[NotificationService] Loaded scheduled notifications:', scheduledNotifications);
-  });
+export const configureNotifications = async () => {
+  const now = Date.now();
+
+  scheduledNotifications = await loadScheduledNotifications();
+  console.log('[NotificationService] Loaded scheduled notifications:', scheduledNotifications);
+
+  for (const noteId of Object.keys(scheduledNotifications)) {
+    const notificationId = scheduledNotifications[noteId];
+    
+    try {
+      const notifications = await notifee.getTriggerNotifications();
+      const notif = notifications.find(n => n.notification.id === notificationId);
+
+      if (notif) {
+        const triggerTimestamp = (notif.trigger as TimestampTrigger).timestamp;
+
+        if (triggerTimestamp <= now) {
+                    console.log(`[NotificationService] Missed notification for noteId=${noteId}`);
+
+          await notifee.displayNotification({
+            title: 'Missed reminder',
+            body: notif.notification.body || 'You missed the reminder',
+            android: {
+              channelId: 'reminder-channel',
+              smallIcon: 'ic_launcher',
+            },
+          });
+          
+          delete scheduledNotifications[noteId];
+        }
+      }
+    } catch (e) {
+      console.warn(`[NotificationService] Failed to check notification for noteId=${noteId}:`, e);
+    }
+  }
+  
+  await saveScheduledNotifications(scheduledNotifications);
 
   configureNotificationEvents();
 };
