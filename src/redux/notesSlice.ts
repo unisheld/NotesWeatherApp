@@ -1,14 +1,21 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-export type NoteType = 'text' | 'reminder' | 'image' | 'sketch';
+export type NoteType = 'text' | 'reminder' | 'image' | 'sketch' | 'geo';
+
+export interface GeoData {
+  latitude?: number;
+  longitude?: number;
+  radius?: number;
+}
 
 export interface Note {
   id: string;
   type: NoteType;
   content: string;
   reminderDate?: string;
-  images?: string[]; 
-  sketchData?: string; 
+  images?: string[];
+  sketchData?: string;
+  geoData?: GeoData;
 }
 
 interface NotesState {
@@ -43,6 +50,7 @@ const notesSlice = createSlice({
     setNotificationTriggeredId: (state, action: PayloadAction<string | null>) => {
       state.notificationTriggeredId = action.payload;
     },
+    
   },
 });
 
@@ -51,7 +59,7 @@ export const {
   updateNote,
   deleteNote,
   setNotes,
-  setNotificationTriggeredId,
+  setNotificationTriggeredId,  
 } = notesSlice.actions;
 
 export default notesSlice.reducer;

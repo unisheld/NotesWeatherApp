@@ -87,6 +87,7 @@ export default function HomeScreen() {
       reminderDate: type === 'reminder' ? new Date().toISOString() : undefined,
       images: type === 'image' ? [] : undefined,
       sketchData: type === 'sketch' ? '' : undefined,
+      geoData: type === 'geo' ? { latitude: 0, longitude: 0, radius: 100 } : undefined,
     };
 
     navigation.navigate('NoteEditor', { noteId: undefined, noteType: type, newNote });
@@ -113,6 +114,11 @@ export default function HomeScreen() {
           type={item.type}
           images={item.images}
           sketchData={item.sketchData}
+          geoData={
+            item.geoData && item.geoData.latitude !== undefined && item.geoData.longitude !== undefined && item.geoData.radius !== undefined
+              ? { latitude: item.geoData.latitude, longitude: item.geoData.longitude, radius: item.geoData.radius }
+              : undefined
+          }
         />
       </Pressable>
       {canEdit && (
@@ -226,6 +232,13 @@ export default function HomeScreen() {
           <AnimatedButton
             title="Image"
             onPress={() => handleSelectNoteType('image')}
+            backgroundColor={theme.primary}
+            color="#fff"
+            style={styles.modalButton}
+          />
+          <AnimatedButton
+            title="Geo"
+            onPress={() => handleSelectNoteType('geo')}
             backgroundColor={theme.primary}
             color="#fff"
             style={styles.modalButton}

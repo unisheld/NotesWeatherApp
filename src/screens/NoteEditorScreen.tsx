@@ -7,43 +7,41 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import uuid from 'react-native-uuid';
 import { launchImageLibrary } from 'react-native-image-picker';
 import SignatureCanvas from 'react-native-signature-canvas';
+import MapView, { Marker, Circle, MapPressEvent } from 'react-native-maps';
 
 import { RootState, AppDispatch } from '../redux/store';
-import { addNote, updateNote, Note, NoteType } from '../redux/notesSlice';
-import {
-  scheduleNotification,
-  cancelNotification,
-} from '../services/notificationService';
+import { addNote, updateNote, Note, NoteType, GeoData } from '../redux/notesSlice';
+import { scheduleNotification, cancelNotification } from '../services/notificationService';
 
 import AnimatedButton from '../components/AnimatedButton';
 import { useTheme } from '../hooks/useTheme';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import CircularTimePicker from '../components/CircularTimePicker';
-
 import { useRoleGuard } from '../hooks/useRoleGuard';
+import { testGeoNotification } from '../services/geoService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NoteEditor'>;
 
 export default function NoteEditorScreen({ route, navigation }: Props) {
   const { noteId } = route.params || {};
   const dispatch = useDispatch<AppDispatch>();
-
   const note = useSelector((state: RootState) =>
     state.notes.notes.find(n => n.id === noteId)
   );
 
   const canEdit = useRoleGuard('editor');
-
   const theme = useTheme();
   const styles = createStyles(theme);
   const sigRef = useRef<any>(null);
+  const pendingSketchPromiseRef = useRef<{ resolve: (data: string) => void } | null>(null);
 
   const routeType = route.params?.noteType as NoteType | undefined;
   const noteType: NoteType = note?.type ?? routeType ?? 'text';
@@ -54,7 +52,10 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
   );
   const [images, setImages] = useState<string[]>(note?.images ?? []);
   const [sketchData, setSketchData] = useState<string | undefined>(note?.sketchData);
-  const pendingSketchPromiseRef = useRef<{ resolve: (data: string) => void } | null>(null);
+  const [geoData, setGeoData] = useState<GeoData | undefined>(
+    note?.geoData ?? { latitude: 52.4345, longitude: 30.9754, radius: 100 }
+  );
+
 
   const handleReminderChange = useCallback((date: Date) => {
     if (date instanceof Date && !isNaN(date.getTime())) {
@@ -67,9 +68,7 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
     const result = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 1 });
     if (result.assets?.length) {
       const uri = result.assets[0]?.uri;
-      if (uri) {
-        setImages(prev => [...prev, uri]);
-      }
+      if (uri) setImages(prev => [...prev, uri]);
     }
   };
 
@@ -111,6 +110,7 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
       reminderDate: noteType === 'reminder' ? reminderDate.toISOString() : undefined,
       images: noteType === 'image' ? images : undefined,
       sketchData: noteType === 'sketch' ? finalSketchData : undefined,
+      geoData: noteType === 'geo' ? geoData : undefined,
     };
 
     if (noteId) {
@@ -223,6 +223,61 @@ export default function NoteEditorScreen({ route, navigation }: Props) {
           </View>
         )}
 
+        {noteType === 'geo' && geoData && (
+          <View style={{ marginTop: 16 }}>
+            <MapView
+              style={{ height: 300, borderRadius: 12 }}
+              initialRegion={{
+                latitude: geoData.latitude ?? 52.4345,
+                longitude: geoData.longitude ?? 30.9754,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+              }}
+              onPress={e => {
+                if (!canEdit) return;
+                const { latitude, longitude } = e.nativeEvent.coordinate;
+                setGeoData(prev => ({ ...prev, latitude, longitude }));
+              }}
+            >
+              {geoData.latitude !== undefined && geoData.longitude !== undefined && (
+                <>
+                  <Marker coordinate={{ latitude: geoData.latitude, longitude: geoData.longitude }} />
+                  <Circle
+                    center={{ latitude: geoData.latitude, longitude: geoData.longitude }}
+                    radius={geoData.radius ?? 100}
+                    strokeColor="rgba(0,150,255,0.5)"
+                    fillColor="rgba(0,150,255,0.2)"
+                  />
+                </>
+              )}
+            </MapView>
+
+            {canEdit && (
+              <View style={{ marginTop: 8 }}>
+                <Text>Radius (m):</Text>
+                <TextInput
+                  value={geoData.radius?.toString() || ''}
+                  onChangeText={text => {
+                    const val = parseFloat(text);
+                    if (!isNaN(val)) setGeoData(prev => ({ ...prev, radius: val }));
+                  }}
+                  keyboardType="numeric"
+                  style={{ borderWidth: 1, padding: 8, marginTop: 4 }}
+                />
+
+
+                <AnimatedButton
+                  title="check geo reminder"
+                  onPress={testGeoNotification}
+                  backgroundColor="#2196F3"
+                  color="#fff"
+                />
+              </View>
+            )}
+          </View>
+        )}
+
+
         <View style={{ marginTop: 24 }}>
           <AnimatedButton
             title="Save"
@@ -285,6 +340,14 @@ const createStyles = (theme: any) =>
       textAlign: 'center',
       color: theme.text + '99',
       fontSize: 12,
+      marginTop: 4,
+    },
+    geoInput: {
+      borderWidth: 1,
+      borderColor: theme.text,
+      borderRadius: 8,
+      padding: 8,
+      color: theme.text,
       marginTop: 4,
     },
   });

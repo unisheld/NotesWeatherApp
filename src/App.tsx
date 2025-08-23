@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import { NavigationContainer } from '@react-navigation/native';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Alert } from 'react-native';
 
 import { store, RootState, AppDispatch } from './redux/store';
 import AppNavigator from './navigation/AppNavigator';
@@ -12,22 +12,36 @@ import {
   requestNotificationPermission,
 } from './utils/permissions';
 import { checkAuthState } from './redux/authSlice';
+import { startGeoMonitoring, stopGeoMonitoring } from './services/geoService';
 
 function Root() {
   const dispatch = useDispatch<AppDispatch>();
   const { user, loading } = useSelector((state: RootState) => state.auth);
+  const notes = useSelector((state: RootState) => state.notes.notes);
 
   useEffect(() => {
     dispatch(checkAuthState());
 
     (async () => {
-      await requestLocationPermission();
+      const locationGranted = await requestLocationPermission();
       await requestNotificationPermission();
       await requestExactAlarmPermission();
       await createNotificationChannel();
       await configureNotifications();
+
+      if (!locationGranted) {
+        Alert.alert('Location permission required for geo reminders');
+      }
     })();
   }, [dispatch]);
+  
+  useEffect(() => {
+    if (!notes.length) return;
+
+    stopGeoMonitoring();
+
+    startGeoMonitoring(notes);
+  }, [notes]);
 
   if (loading) {
     return (
@@ -57,4 +71,3 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
-

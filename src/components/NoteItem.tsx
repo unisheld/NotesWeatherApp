@@ -25,6 +25,7 @@ interface NoteItemProps {
   images?: string[];
   sketchData?: string;
   reminderDate?: string;
+  geoData?: { latitude: number; longitude: number; radius: number };
 }
 
 export default function NoteItem({
@@ -34,6 +35,7 @@ export default function NoteItem({
   images,
   sketchData,
   reminderDate,
+  geoData,
 }: NoteItemProps) {
   const pulse = useSharedValue(1);
 
@@ -75,7 +77,7 @@ export default function NoteItem({
       )}
 
       {type === 'reminder' && reminderDate && (
-        <View>         
+        <View>
           {isNotificationActive && (
             <Text style={styles.notificationText}>Notified!</Text>
           )}
@@ -112,6 +114,16 @@ export default function NoteItem({
           </View>
         )
       ) : null}
+
+      {type === 'geo' && geoData && (
+        <View style={styles.geoContainer}>
+          <Text style={styles.geoLabel}>Geo Reminder</Text>
+          <Text style={styles.geoText}>
+            Lat: {geoData.latitude.toFixed(3)}, Lon: {geoData.longitude.toFixed(3)}
+          </Text>
+          <Text style={styles.geoText}>Radius: {geoData.radius} m</Text>
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -176,5 +188,23 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
     marginTop: 60,
+  },
+  geoContainer: {
+    marginTop: 6,
+    padding: 6,
+    borderWidth: 1,
+    borderColor: '#4caf50',
+    borderRadius: 6,
+    backgroundColor: '#e8f5e9',
+  },
+  geoLabel: {
+    fontWeight: 'bold',
+    fontSize: 12,
+    color: '#2e7d32',
+    marginBottom: 2,
+  },
+  geoText: {
+    fontSize: 12,
+    color: '#2e7d32',
   },
 });
